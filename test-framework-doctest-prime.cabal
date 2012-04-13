@@ -1,0 +1,25 @@
+Name:                   test-framework-doctest-prime
+Version:                0.0.0
+Author:                 Kazu Yamamoto <kazu@iij.ad.jp>
+Maintainer:             Kazu Yamamoto <kazu@iij.ad.jp>
+License:                BSD3
+License-File:           LICENSE
+Synopsis:               Test Framework Provider for doctest
+Description:            Test Framework Provider for doctest
+Category:               Testing
+Cabal-Version:          >= 1.6
+Build-Type:             Simple
+
+Library
+  if impl(ghc >= 6.12)
+    GHC-Options:        -Wall -fno-warn-unused-do-bind
+  else
+    GHC-Options:        -Wall
+  Exposed-Modules:      Test.Framework.Providers.DocTest.Prime
+  Build-Depends:        base >= 4 && < 5
+                      , test-framework
+                      , doctest
+
+Source-Repository head
+  Type:                 git
+  Location:             git://github.com/kazu-yamamoto/test-framework-doctest-prime.git
