@@ -1,38 +1,29 @@
 {-# LANGUAGE MultiParamTypeClasses, TypeOperators #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
+-- |
+-- Test framework provider for doctest.
+
 module Test.Framework.Providers.DocTest.Prime (
-    docTest
+    DocTest
+  , docTest
   ) where
 
+import Data.List (intercalate)
 import Test.DocTest
 import Test.Framework.Providers.API
-import Data.List (intercalate)
 
-data DocTestRunning = DocTestRunning
+----------------------------------------------------------------
 
-instance Show DocTestRunning where
-    show DocTestRunning = "Running"
+-- | Type for doctest
+type DocTest = IO Test
 
-instance Show Result where
-    show r
-      | doctestSucceeded r = "OK, " ++ show (rExamples r) ++ " exmaples (" ++ show (rInteractions r) ++" interactions)"
-      | otherwise          = intercalate "\n" $ rFailureMessages r
-
-instance TestResultlike DocTestRunning Result where
-    testSucceeded = doctestSucceeded
-
-doctestSucceeded :: Result -> Bool
-doctestSucceeded = isSucceeded
-
-instance Testlike DocTestRunning Result DocTest where
-    runTest = runDocTest
-    testTypeName _ = "DocTest"
-
-newtype DocTest = DocTest (IO Result)
-
-docTest :: [String] -> [String] -> IO Test
-docTest files opts = return $ Test (testName files) (DocTest doctest)
+-- |
+-- Gathering tests from Haddock documentation of functions.
+docTest :: [String] -- ^ File names
+        -> [String] -- ^ GHC options
+        -> DocTest
+docTest files opts = return $ Test (testName files) (DocTestAction doctest)
   where
     testName []    = "DocTest"
     testName (f:_) = "DocTest " ++ f
@@ -41,12 +32,41 @@ docTest files opts = return $ Test (testName files) (DocTest doctest)
         withInterpreter (opts ++ files) $ \repl -> -- FIXME
             runModules repl False modules
 
-runDocTest :: CompleteTestOptions -> DocTest -> IO (DocTestRunning :~> Result, IO ())
-runDocTest topts (DocTest doctest) = runImprovingIO $ do
+----------------------------------------------------------------
+
+data DocTestRunning = DocTestRunning
+
+instance Show DocTestRunning where
+    show DocTestRunning = "Running"
+
+----------------------------------------------------------------
+
+instance Show Result where
+    show r
+      | doctestSucceeded r = "OK, " ++ show (rExamples r) ++ " exmaples (" ++ show (rInteractions r) ++" interactions)"
+      | otherwise          = intercalate "\n" $ rFailureMessages r
+
+----------------------------------------------------------------
+
+instance TestResultlike DocTestRunning Result where
+    testSucceeded = doctestSucceeded
+
+doctestSucceeded :: Result -> Bool
+doctestSucceeded = isSucceeded
+
+----------------------------------------------------------------
+
+newtype DocTestAction = DocTestAction (IO Result)
+
+instance Testlike DocTestRunning Result DocTestAction where
+    runTest = runDocTest
+    testTypeName _ = "DocTest"
+
+runDocTest :: CompleteTestOptions -> DocTestAction -> IO (DocTestRunning :~> Result, IO ())
+runDocTest topts (DocTestAction doctest) = runImprovingIO $ do
     yieldImprovement DocTestRunning
     mb_result <- maybeTimeoutImprovingIO (unK $ topt_timeout topts) $ liftIO doctest
     return (mb_result `orElse` errorResult)
     
 errorResult :: Result
 errorResult = Result 0 0 0 0 0 []
-
