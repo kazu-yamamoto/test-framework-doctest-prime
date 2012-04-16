@@ -23,14 +23,34 @@ type DocTest = IO Test
 docTest :: [String] -- ^ File names
         -> [String] -- ^ GHC options
         -> DocTest
-docTest files opts = return $ Test (testName files) (DocTestAction doctest)
+docTest files options = do
+    modules <- getDocTests options files
+    tests <- mapM (moduleToTest opts) modules
+    return $ TestGroup "DocTest" tests
+ where
+    opts = options ++ files
+
+moduleToTest :: [String] -> Module Example -> IO Test
+moduleToTest opts mdl = do
+    i <- newInterpreter opts
+    return $ TestGroup name (tests i)
   where
-    testName []    = "DocTest"
-    testName (f:_) = "DocTest " ++ f
-    doctest = do
-        modules <- getDocTests opts files
-        withInterpreter (opts ++ files) $ \repl -> -- FIXME
-            runModules repl False modules
+    name = moduleName mdl
+    examples = moduleContent mdl
+    others   = init examples
+    sentinel = last examples
+    tests i  = map (exampleToTest i name) others
+            ++ [exampleToTest' i name sentinel]
+
+exampleToTest :: Interpreter -> String -> Example -> Test
+exampleToTest i name example = Test (exampleLabel example) . DocTestAction $
+    runExample i name example
+
+exampleToTest' :: Interpreter -> String -> Example -> Test
+exampleToTest' i name example = Test (exampleLabel example) . DocTestAction $ do
+    res <- runExample i name example
+    closeInterpreter i
+    return res
 
 ----------------------------------------------------------------
 
@@ -41,32 +61,30 @@ instance Show DocTestRunning where
 
 ----------------------------------------------------------------
 
-instance Show Result where
-    show r
-      | doctestSucceeded r = "OK, " ++ show (rExamples r) ++ " exmaples (" ++ show (rInteractions r) ++" interactions)"
-      | otherwise          = intercalate "\n" $ rFailureMessages r
+instance Show InteractionResult where
+    show Success = "OK"
+    show (Failure loc expression expected actual) = intercalate "\n" actual -- FIXME
+    show (Error loc expression err) = err -- FIXME
 
 ----------------------------------------------------------------
 
-instance TestResultlike DocTestRunning Result where
+instance TestResultlike DocTestRunning InteractionResult where
     testSucceeded = doctestSucceeded
 
-doctestSucceeded :: Result -> Bool
-doctestSucceeded = isSucceeded
+doctestSucceeded :: InteractionResult -> Bool
+doctestSucceeded Success = True
+doctestSucceeded _       = False
 
 ----------------------------------------------------------------
 
-newtype DocTestAction = DocTestAction (IO Result)
+newtype DocTestAction = DocTestAction (IO InteractionResult)
 
-instance Testlike DocTestRunning Result DocTestAction where
+instance Testlike DocTestRunning InteractionResult DocTestAction where
     runTest = runDocTest
     testTypeName _ = "DocTest"
 
-runDocTest :: CompleteTestOptions -> DocTestAction -> IO (DocTestRunning :~> Result, IO ())
+runDocTest :: CompleteTestOptions -> DocTestAction -> IO (DocTestRunning :~> InteractionResult, IO ())
 runDocTest topts (DocTestAction doctest) = runImprovingIO $ do
     yieldImprovement DocTestRunning
     mb_result <- maybeTimeoutImprovingIO (unK $ topt_timeout topts) $ liftIO doctest
-    return (mb_result `orElse` errorResult)
-    
-errorResult :: Result
-errorResult = Result 0 0 0 0 0 []
+    return (mb_result `orElse` Success)
