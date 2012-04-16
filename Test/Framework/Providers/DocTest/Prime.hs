@@ -63,7 +63,8 @@ instance Show DocTestRunning where
 
 instance Show InteractionResult where
     show Success = "OK"
-    show (Failure loc expression expected actual) = loc ++ ": expression `" ++ expression ++ "'\nexpected: " ++ (intercalate "\n" expected) ++ "\n but got: " ++ (intercalate "\n" actual)
+    show (Failure loc expression actual (Just expected)) = loc ++ ": expression `" ++ expression ++ "'\nexpected: " ++ intercalate "\n" expected ++ "\n but got: " ++ intercalate "\n" actual
+    show (Failure loc expression actual Nothing) = loc ++ ": expression `" ++ expression ++ "'\n" ++ concat actual
     show (Error loc expression err) = loc ++ ": expression `" ++ expression ++ "'\nError: " ++ err
 
 ----------------------------------------------------------------
