@@ -62,9 +62,9 @@ instance Show DocTestRunning where
 ----------------------------------------------------------------
 
 instance Show InteractionResult where
-    show Success = "OK"
+    show (Success n) = "OK, passed " ++ show n ++" interactions"
     show (Failure loc expression actual (Just expected)) = loc ++ ": expression `" ++ expression ++ "'\nexpected: " ++ intercalate "\n" expected ++ "\n but got: " ++ intercalate "\n" actual
-    show (Failure loc expression actual Nothing) = loc ++ ": expression `" ++ expression ++ "'\n" ++ concat actual
+    show (Failure loc expression actual Nothing) = loc ++ ": expression `" ++ expression ++ "'\n" ++ intercalate "\n" actual
     show (Error loc expression err) = loc ++ ": expression `" ++ expression ++ "'\nError: " ++ err
 
 ----------------------------------------------------------------
@@ -73,8 +73,8 @@ instance TestResultlike DocTestRunning InteractionResult where
     testSucceeded = doctestSucceeded
 
 doctestSucceeded :: InteractionResult -> Bool
-doctestSucceeded Success = True
-doctestSucceeded _       = False
+doctestSucceeded (Success _) = True
+doctestSucceeded _           = False
 
 ----------------------------------------------------------------
 
@@ -88,4 +88,4 @@ runDocTest :: CompleteTestOptions -> DocTestAction -> IO (DocTestRunning :~> Int
 runDocTest topts (DocTestAction doctest) = runImprovingIO $ do
     yieldImprovement DocTestRunning
     mb_result <- maybeTimeoutImprovingIO (unK $ topt_timeout topts) $ liftIO doctest
-    return (mb_result `orElse` Success)
+    return (mb_result `orElse` Success 0)
